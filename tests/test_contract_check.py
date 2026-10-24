@@ -215,3 +215,12 @@ def test_scope_in_a_request_matches_a_hand_written_contract():
         schemas[name]["additionalProperties"] = False
 
     assert check(contract, code_app.openapi()) == []
+
+
+def test_security_scheme_of_a_pending_operation_is_not_required_in_the_code():
+    pending = {"get": {"operationId": "later", "x-pending-implementation": True, "responses": {}}}
+    contract = spec({"/health": HEALTH, "/later": pending})
+    code = spec({"/health": HEALTH})
+    code["components"]["securitySchemes"] = {}
+
+    assert check(contract, code) == []

@@ -176,7 +176,14 @@ def check(contract: dict[str, Any], code: dict[str, Any]) -> list[str]:
             f"{name}: {p}" for p in _compare_responses(want["responses"], have["responses"])
         ]
 
-    used = {scheme for op in expected.values() for req in op["security"] for scheme in req}
+    # Only operations the code has: a pending one can't show its scheme in the code's OpenAPI yet.
+    used = {
+        scheme
+        for name, op in expected.items()
+        if name in actual
+        for req in op["security"]
+        for scheme in req
+    }
     if _schemes(contract, used) != _schemes(code, used):
         problems.append(
             f"securitySchemes differ\n    contract: {_canon(_schemes(contract, used))}"
