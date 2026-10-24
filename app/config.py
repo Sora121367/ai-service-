@@ -53,6 +53,14 @@ class Settings(BaseSettings):
     chunk_max_chars: int = 1200
 
     @property
+    def sqlalchemy_url(self) -> str:
+        """database_url with the psycopg 3 driver, for SQLAlchemy and Alembic."""
+        for plain in ("postgresql://", "postgres://"):
+            if self.database_url.startswith(plain):
+                return "postgresql+psycopg://" + self.database_url[len(plain) :]
+        return self.database_url
+
+    @property
     def jwks_url(self) -> str:
         if self.auth_jwks_url:
             return self.auth_jwks_url
