@@ -1,7 +1,7 @@
 import httpx
 import pytest
 
-from app.ingestion.links import LinkFetchError, fetch_link
+from app.clients.link_fetcher import LinkFetchError, fetch_link
 
 PUBLIC = "93.184.216.34"
 OTHER_PUBLIC = "151.101.1.1"

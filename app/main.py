@@ -1,6 +1,4 @@
-from fastapi import APIRouter, Depends, FastAPI
-
-from app.auth import require_service_token
+from fastapi import FastAPI
 
 app = FastAPI(
     title="InsightHub AI Service (internal)",
@@ -14,6 +12,4 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-def include_protected(router: APIRouter, target: FastAPI = app) -> None:
-    """Mount a feature router. Every endpoint except /health requires the service token."""
-    target.include_router(router, dependencies=[Depends(require_service_token)])
+# Feature routers are mounted with app.api.routing.include_protected(router, app).

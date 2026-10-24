@@ -41,6 +41,17 @@ class Settings(BaseSettings):
     embedding_model: str | None = None
     web_search_api_key: SecretStr | None = None
 
+    # Link ingestion limits (spec Section 9). Passed to app.clients.link_fetcher.fetch_link.
+    link_user_agent: str = "InsightHubBot/0.1"
+    link_max_bytes: int = 25 * 1024 * 1024
+    link_max_redirects: int = 5
+    link_timeout_seconds: float = 20.0
+
+    # Ingestion tuning.
+    ocr_lang: str = "en"  # PaddleOCR language code
+    ocr_pdf_dpi: int = 200
+    chunk_max_chars: int = 1200
+
     @property
     def jwks_url(self) -> str:
         if self.auth_jwks_url:

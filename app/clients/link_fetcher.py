@@ -9,8 +9,7 @@ from urllib.parse import urljoin, urlsplit
 
 import httpx
 
-from app.ingestion.parsing.errors import ParseError
-
+# Defaults match Settings.link_*; the service passes the configured values explicitly.
 USER_AGENT = "InsightHubBot/0.1"
 DEFAULT_MAX_BYTES = 25 * 1024 * 1024
 DEFAULT_MAX_REDIRECTS = 5
@@ -28,7 +27,7 @@ Resolver = Callable[[str, int], list[str]]
 HopCheck = Callable[[str, str, int], None]  # (url, host, port), called before each request
 
 
-class LinkFetchError(ParseError):
+class LinkFetchError(Exception):
     """The link can't be fetched. The message is safe to show as job status: it never includes
     resolved addresses or response content."""
 

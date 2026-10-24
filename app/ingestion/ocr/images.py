@@ -7,14 +7,16 @@ import pptx
 import pymupdf
 from pptx.enum.shapes import MSO_SHAPE_TYPE
 
-_PDF_DPI = 200
+DEFAULT_PDF_DPI = 200  # the service passes Settings.ocr_pdf_dpi
 
 
-def pdf_page_images(path: Path, page_numbers: tuple[int, ...]) -> Iterator[tuple[int, list[bytes]]]:
+def pdf_page_images(
+    path: Path, page_numbers: tuple[int, ...], dpi: int = DEFAULT_PDF_DPI
+) -> Iterator[tuple[int, list[bytes]]]:
     """Each flagged page rendered whole: scans hold the text in the picture, not beside it."""
     with pymupdf.open(path, filetype="pdf") as doc:
         for number in page_numbers:
-            pixmap = doc[number - 1].get_pixmap(dpi=_PDF_DPI)
+            pixmap = doc[number - 1].get_pixmap(dpi=dpi)
             yield number, [pixmap.tobytes("png")]
 
 

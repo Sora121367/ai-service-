@@ -5,18 +5,20 @@ from pathlib import Path
 
 import pymupdf
 
-from app.ingestion.ocr.engine import OcrEngine, PaddleOcrEngine
-from app.ingestion.ocr.images import pdf_page_images, pptx_slide_images
+from app.ingestion.ocr.engine import OcrEngine
+from app.ingestion.ocr.images import DEFAULT_PDF_DPI, pdf_page_images, pptx_slide_images
 from app.ingestion.parsing._text import normalize
 from app.ingestion.parsing.models import Anchor, Block, ParsedDocument
 from app.ingestion.parsing.pdf import section_paths
 
-__all__ = ["OcrEngine", "PaddleOcrEngine", "run_ocr"]
+__all__ = ["OcrEngine", "run_ocr"]
 
 
-def _page_images(path: Path, document: ParsedDocument) -> Iterator[tuple[int, list[bytes]]]:
+def _page_images(
+    path: Path, document: ParsedDocument, pdf_dpi: int
+) -> Iterator[tuple[int, list[bytes]]]:
     if document.source_type == "pdf":
-        return pdf_page_images(path, document.pages_needing_ocr)
+        return pdf_page_images(path, document.pages_needing_ocr, pdf_dpi)
     if document.source_type == "pptx":
         return pptx_slide_images(path, document.pages_needing_ocr)
     return iter(())
@@ -41,7 +43,9 @@ def _position(block: Block) -> int:
     return block.anchor.page or block.anchor.slide or 0
 
 
-def run_ocr(path: Path, document: ParsedDocument, engine: OcrEngine) -> ParsedDocument:
+def run_ocr(
+    path: Path, document: ParsedDocument, engine: OcrEngine, pdf_dpi: int = DEFAULT_PDF_DPI
+) -> ParsedDocument:
     """A copy of `document` with one paragraph block per OCR'd image.
 
     Pages where nothing was read stay in `pages_needing_ocr`, so the caller can tell the user.
@@ -53,7 +57,7 @@ def run_ocr(path: Path, document: ParsedDocument, engine: OcrEngine) -> ParsedDo
     outline = _outline(path, document)
     added: list[Block] = []
     unread = set(document.pages_needing_ocr)
-    for number, images in _page_images(path, document):
+    for number, images in _page_images(path, document, pdf_dpi):
         anchor = _anchor(document, number, outline)
         for image in images:
             lines = (normalize(line) for line in engine.recognize(image))
