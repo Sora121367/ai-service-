@@ -40,6 +40,8 @@ class Settings(BaseSettings):
     llm_model: str | None = None
     embedding_model: str | None = None
     web_search_api_key: SecretStr | None = None
+    embedding_timeout_seconds: float = 60.0
+    embedding_batch_size: int = 16
 
     # Link ingestion limits (spec Section 9). Passed to app.clients.link_fetcher.fetch_link.
     link_user_agent: str = "InsightHubBot/0.1"
