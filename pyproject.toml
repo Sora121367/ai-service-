@@ -12,15 +12,22 @@ dependencies = [
     "python-docx",
     "python-pptx",
     "pymupdf",
+    "sqlalchemy>=2.1.6",
+    "alembic>=1.20.1",
+    "psycopg[binary]>=3.3.6",
 ]
-# Added with the first code that uses them: sqlalchemy, pgvector, alembic, psycopg, boto3, redis.
+# Added with the first code that uses them: pgvector, boto3, redis.
 
 [project.optional-dependencies]
 # Local OCR (`uv sync --extra ocr`). Heavy, so it is not part of the default install.
 ocr = ["paddleocr", "paddlepaddle", "opencv-python-headless", "numpy"]
 
 [dependency-groups]
-dev = ["pytest", "ruff"]
+dev = [
+    "pytest",
+    "pyyaml>=6.0.3",
+    "ruff",
+]
 
 [tool.ruff]
 line-length = 100
