@@ -1,13 +1,15 @@
 openapi: 3.1.0
 info:
   title: InsightHub AI Service (internal)
-  version: 0.1.0
+  version: 0.2.0
   description: |
     Internal API of the InsightHub AI service. Owned by the insighthub-ai-service repo.
     Called only by the InsightHub Spring Boot backend (Keycloak client-credentials token, audience insighthub-ai-service).
     Released by tagging vX.Y.Z (= info.version): the YAML is attached to the GitHub release and a Java client is published.
     Rules: every search/generation request carries a Scope; requests without one are rejected (400).
     All delete endpoints are idempotent (ADR-0002). Long work returns 202 + job id, progress by callback (ADR-0003).
+    Errors are RFC 9457 Problem Details with a stable `code`. Request validation failures are 400 (never 422).
+    Operations marked `x-pending-implementation: true` are specified here before the service implements them.
 servers:
   - url: http://localhost:8000
 security:
@@ -16,18 +18,185 @@ paths:
   /health:
     get:
       operationId: health
+      summary: Liveness check. No token required.
       security: []
       responses:
         "200": { description: OK }
+  /jobs/{jobId}:
+    get:
+      operationId: getJob
+      x-pending-implementation: true
+      summary: Status of a job. Polling fallback when a callback was missed (ADR-0003).
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+      responses:
+        "200":
+          description: The job.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Job" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /documents/{documentId}:
+    delete:
+      operationId: deleteDocument
+      x-pending-implementation: true
+      summary: Delete everything derived from one document (chunks, embeddings, derived files). Idempotent.
+      description: |
+        Succeeds, with a job that ends SUCCEEDED, when the document is unknown or already deleted.
+        `documentId` is the backend's material or source id; this service treats it as an opaque UUID (ADR-0002).
+      parameters:
+        - $ref: "#/components/parameters/DocumentId"
+      responses:
+        "202": { $ref: "#/components/responses/JobAccepted" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /workspaces/{workspaceId}/documents:
+    delete:
+      operationId: deleteWorkspaceDocuments
+      x-pending-implementation: true
+      summary: Delete everything derived from the personal sources of one workspace. Idempotent.
+      description: Used when a personal workspace is deleted. Course materials are never held per workspace.
+      parameters:
+        - $ref: "#/components/parameters/WorkspaceId"
+      responses:
+        "202": { $ref: "#/components/responses/JobAccepted" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /owners/{ownerId}/documents:
+    delete:
+      operationId: deleteOwnerDocuments
+      x-pending-implementation: true
+      summary: Delete everything derived from the personal sources of one user. Idempotent.
+      description: Used when an account is deleted.
+      parameters:
+        - $ref: "#/components/parameters/OwnerId"
+      responses:
+        "202": { $ref: "#/components/responses/JobAccepted" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /documents/ids:
+    get:
+      operationId: listDocumentIds
+      x-pending-implementation: true
+      summary: Ids of all documents this service holds chunks for, for the backend's nightly reconciliation.
+      description: |
+        Pages are ordered by id. Follow `nextCursor` until it is absent. Ids the backend no longer knows are
+        orphans to delete with deleteDocument; ids it expects but are missing here need re-processing.
+      parameters:
+        - name: scopeType
+          in: query
+          required: false
+          description: Only documents of this scope type.
+          schema: { type: string, enum: [personal, course] }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 5000, default: 1000 }
+        - name: cursor
+          in: query
+          required: false
+          description: Opaque value from the previous page's `nextCursor`.
+          schema: { type: string }
+      responses:
+        "200":
+          description: One page of document ids.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DocumentIdPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+webhooks:
+  jobUpdated:
+    post:
+      operationId: jobUpdatedCallback
+      summary: Callback this service sends to the backend on job progress, success or failure (ADR-0003).
+      description: |
+        Sent to the backend's configured callback URL, authenticated with this service's own client-credentials token.
+        Delivery is at least once: failed deliveries are retried with exponential backoff, so the backend must
+        treat `eventId` as an idempotency key and answer 2xx once it has stored the event. The backend may also
+        poll `getJob`. Status changes are ordered by `job.updatedAt`; ignore an event older than the stored state.
+        The delivery rules are proposed in ADR-0003 and need the backend lead's confirmation.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/JobEvent" }
+      responses:
+        "204": { description: Event stored. }
 components:
   securitySchemes:
     serviceToken:
       type: http
       scheme: bearer
       bearerFormat: JWT
+  parameters:
+    JobId:
+      name: jobId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    DocumentId:
+      name: documentId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    WorkspaceId:
+      name: workspaceId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    OwnerId:
+      name: ownerId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  responses:
+    JobAccepted:
+      description: Accepted. The work runs as a job; progress arrives by callback, or poll getJob.
+      headers:
+        Location:
+          description: Path of the job, /jobs/{jobId}.
+          schema: { type: string }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Job" }
+    BadRequest:
+      description: |
+        The request is invalid. `code` is SCOPE_REQUIRED (no scope), SCOPE_INVALID (scope malformed or with an
+        empty document selection) or INVALID_REQUEST (anything else).
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    Unauthorized:
+      description: Missing, invalid or wrongly issued service token. `code` is UNAUTHORIZED.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    NotFound:
+      description: Unknown id. `code` is NOT_FOUND.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
   schemas:
+    Problem:
+      description: RFC 9457 Problem Details. Never contains request content, file text, tokens or addresses.
+      type: object
+      required: [title, status, code]
+      properties:
+        type: { type: string, default: about:blank }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        code:
+          description: Stable machine-readable error code.
+          type: string
     Scope:
-      description: Built by Spring Boot only. The AI service applies it as a mandatory filter and never widens it.
+      description: |
+        Built by Spring Boot only. The AI service applies it as a mandatory filter and never widens it.
+        `documentIds` are the backend's material or source ids (spec Section 5 calls them material_id).
+        Unknown properties are ignored.
       oneOf:
         - $ref: "#/components/schemas/PersonalScope"
         - $ref: "#/components/schemas/CourseScope"
@@ -62,3 +231,46 @@ components:
     JobStatus:
       type: string
       enum: [QUEUED, RUNNING, SUCCEEDED, FAILED]
+    Job:
+      type: object
+      required: [jobId, type, status, createdAt, updatedAt]
+      properties:
+        jobId: { type: string, format: uuid }
+        type:
+          description: What the job does, for example `delete-document`. New values may be added in a minor version.
+          type: string
+        status: { $ref: "#/components/schemas/JobStatus" }
+        progress:
+          description: Percent done, when known.
+          type: integer
+          minimum: 0
+          maximum: 100
+        documentId:
+          description: The document the job works on, when it works on exactly one.
+          type: string
+          format: uuid
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        error:
+          description: Present only when status is FAILED. The detail is safe to show to users.
+          $ref: "#/components/schemas/Problem"
+    JobEvent:
+      type: object
+      required: [eventId, occurredAt, job]
+      properties:
+        eventId:
+          description: Unique per event; the same value on every retry of a delivery.
+          type: string
+          format: uuid
+        occurredAt: { type: string, format: date-time }
+        job: { $ref: "#/components/schemas/Job" }
+    DocumentIdPage:
+      type: object
+      required: [documentIds]
+      properties:
+        documentIds:
+          type: array
+          items: { type: string, format: uuid }
+        nextCursor:
+          description: Absent on the last page.
+          type: string

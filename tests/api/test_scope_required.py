@@ -53,6 +53,12 @@ def test_valid_scope_is_accepted(client):
     assert response.status_code == 200
 
 
+def test_unknown_scope_fields_are_ignored(client):
+    scope = {**valid_scope(), "someFutureField": "x"}
+
+    assert client.post("/scoped", json={"scope": scope, "query": "q"}).status_code == 200
+
+
 @pytest.mark.parametrize("body", [{"query": "q"}, {}, None])
 def test_missing_scope_returns_400_problem_details(client, body):
     response = client.post("/scoped", json=body) if body is not None else client.post("/scoped")
@@ -74,7 +80,7 @@ def test_missing_scope_returns_400_problem_details(client, body):
         {},
         {**valid_scope(), "documentIds": []},  # an empty selection must not mean "everything"
         {**valid_scope(), "scopeType": "global"},
-        {**valid_scope(), "extra": "x"},
+        {**valid_scope(), "workspaceId": str(uuid4())},  # a personal field on a course scope
     ],
 )
 def test_invalid_scope_returns_400(client, scope):
@@ -90,12 +96,15 @@ def test_error_does_not_echo_the_request(client):
     assert "secret-text" not in response.text
 
 
-def test_other_validation_errors_stay_422(client):
+def test_other_validation_errors_are_400_invalid_request(client):
     response = client.post("/scoped", json={"scope": valid_scope()})
 
-    assert response.status_code == 422
+    assert response.status_code == 400
+    assert response.headers["content-type"].startswith(PROBLEM_JSON)
+    assert response.json()["code"] == "INVALID_REQUEST"
 
 
-def test_endpoints_without_a_scope_field_are_not_affected(client):
-    assert client.post("/unscoped", json={}).status_code == 422
-    assert client.post("/unscoped").status_code == 422
+def test_endpoints_without_a_scope_field_never_say_scope(client):
+    for response in (client.post("/unscoped", json={}), client.post("/unscoped")):
+        assert response.status_code == 400
+        assert response.json()["code"] == "INVALID_REQUEST"
