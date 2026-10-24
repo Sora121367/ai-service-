@@ -8,9 +8,10 @@ from functools import lru_cache
 from typing import Annotated, Any
 
 import jwt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+from app.api.errors import ProblemError
 from app.config import Settings, get_settings
 
 ALGORITHMS = ["RS256"]
@@ -33,10 +34,11 @@ def get_key_resolver(settings: Annotated[Settings, Depends(get_settings)]) -> Ke
     return lambda token: client.get_signing_key_from_jwt(token).key
 
 
-def _unauthorized() -> HTTPException:
-    return HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Invalid or missing service token",
+def _unauthorized() -> ProblemError:
+    return ProblemError(
+        status.HTTP_401_UNAUTHORIZED,
+        "UNAUTHORIZED",
+        "Invalid or missing service token",
         headers={"WWW-Authenticate": "Bearer"},
     )
 
@@ -64,9 +66,10 @@ def require_service_token(
             },
         )
     except jwt.PyJWKClientConnectionError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Cannot reach the identity provider to verify the token",
+        raise ProblemError(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "IDP_UNAVAILABLE",
+            "Cannot reach the identity provider to verify the token",
         ) from exc
     except jwt.PyJWTError as exc:
         raise _unauthorized() from exc

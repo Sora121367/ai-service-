@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, FastAPI
 from fastapi.testclient import TestClient
 
 from app.api.auth import get_key_resolver, require_service_token
+from app.api.errors import PROBLEM_JSON, register_error_handlers
 from app.api.routing import include_protected
 from app.config import Settings, get_settings
 from app.main import app as real_app
@@ -30,6 +31,7 @@ def make_settings(**overrides) -> Settings:
 
 def build_client(signing_key, settings: Settings | None = None, resolver=None) -> TestClient:
     app = FastAPI()
+    register_error_handlers(app)
 
     @app.get("/protected")
     def protected(claims: Annotated[dict[str, Any], Depends(require_service_token)]):
@@ -60,6 +62,14 @@ def call(client: TestClient, token: str | None = None, scheme: str = "Bearer"):
 def assert_unauthorized(response):
     assert response.status_code == 401
     assert response.headers["WWW-Authenticate"] == "Bearer"
+    assert response.headers["content-type"].startswith(PROBLEM_JSON)
+    assert response.json() == {
+        "type": "about:blank",
+        "title": "Unauthorized",
+        "status": 401,
+        "detail": "Invalid or missing service token",
+        "code": "UNAUTHORIZED",
+    }
 
 
 def test_accepts_valid_service_token(signing_key):
@@ -146,6 +156,9 @@ def test_returns_503_when_keycloak_unreachable(signing_key):
     response = call(build_client(signing_key, resolver=unreachable), sign(signing_key, claims()))
 
     assert response.status_code == 503
+    assert response.headers["content-type"].startswith(PROBLEM_JSON)
+    assert response.json()["code"] == "IDP_UNAVAILABLE"
+    assert "connection refused" not in response.text
 
 
 PUBLIC_PATHS = {"/health"}

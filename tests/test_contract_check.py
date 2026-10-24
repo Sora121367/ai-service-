@@ -209,10 +209,6 @@ def test_scope_in_a_request_matches_a_hand_written_contract():
         }
     }
     del schemas["JobStatus"]
-    # Known gap: the models use extra="forbid" (additionalProperties: false) but the contract is
-    # silent. Close it in a /contract-change PR, then delete these two lines.
-    for name in ("PersonalScope", "CourseScope"):
-        schemas[name]["additionalProperties"] = False
 
     assert check(contract, code_app.openapi()) == []
 

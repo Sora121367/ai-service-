@@ -1,17 +1,52 @@
-"""RFC 9457 Problem Details for errors the API raises itself (docs/conventions.md)."""
+"""RFC 9457 Problem Details for every error the API returns (docs/conventions.md).
 
+Bodies hold a stable `code` and fixed wording only: never request content, file text, tokens,
+addresses or exception messages.
+"""
+
+import logging
+from http import HTTPStatus
 from typing import Any
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 PROBLEM_JSON = "application/problem+json"
 
+logger = logging.getLogger("insighthub.api")
 
-def problem(status: int, title: str, code: str, detail: str) -> JSONResponse:
+# `code` for errors raised by the framework (unknown route, wrong method) or plain HTTPExceptions.
+_CODES = {401: "UNAUTHORIZED", 404: "NOT_FOUND", 405: "METHOD_NOT_ALLOWED"}
+
+
+class ProblemError(HTTPException):
+    """An HTTPException that carries its own stable `code`."""
+
+    def __init__(
+        self, status_code: int, code: str, detail: str, headers: dict[str, str] | None = None
+    ) -> None:
+        super().__init__(status_code=status_code, detail=detail, headers=headers)
+        self.code = code
+
+
+def _title(status: int) -> str:
+    try:
+        return HTTPStatus(status).phrase
+    except ValueError:
+        return "Error"
+
+
+def problem(
+    status: int,
+    title: str,
+    code: str,
+    detail: str,
+    headers: dict[str, str] | None = None,
+) -> JSONResponse:
     body = {"type": "about:blank", "title": title, "status": status, "detail": detail, "code": code}
-    return JSONResponse(body, status_code=status, media_type=PROBLEM_JSON)
+    return JSONResponse(body, status_code=status, media_type=PROBLEM_JSON, headers=headers)
 
 
 def _takes_scope(request: Request) -> bool:
@@ -38,9 +73,29 @@ async def _validation_error(request: Request, exc: RequestValidationError) -> JS
     # Never echo the input back: it may hold user content.
     if (response := _scope_problem(request, exc.errors())) is not None:
         return response
-    errors = [{"loc": list(e["loc"]), "type": e["type"]} for e in exc.errors()]
-    return JSONResponse({"detail": errors}, status_code=422)
+    return problem(400, "Invalid request", "INVALID_REQUEST", "The request is invalid.")
+
+
+async def _http_error(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+    code = getattr(exc, "code", None) or _CODES.get(exc.status_code, f"HTTP_{exc.status_code}")
+    return problem(
+        exc.status_code,
+        _title(exc.status_code),
+        code,
+        str(exc.detail),
+        headers=dict(exc.headers) if exc.headers else None,
+    )
+
+
+async def _unhandled_error(request: Request, exc: Exception) -> JSONResponse:
+    # Log the type and route only: the message may hold user content.
+    logger.error("unhandled %s on %s %s", type(exc).__name__, request.method, request.url.path)
+    return problem(
+        500, "Internal Server Error", "INTERNAL_ERROR", "The service failed unexpectedly."
+    )
 
 
 def register_error_handlers(app: FastAPI) -> None:
     app.add_exception_handler(RequestValidationError, _validation_error)  # type: ignore[arg-type]
+    app.add_exception_handler(StarletteHTTPException, _http_error)  # type: ignore[arg-type]
+    app.add_exception_handler(Exception, _unhandled_error)

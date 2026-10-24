@@ -49,7 +49,6 @@ def test_scope_is_immutable():
         course(documentIds=[]),
         {k: v for k, v in personal().items() if k != "ownerId"},
         {k: v for k, v in course().items() if k != "courseId"},
-        personal(extra="x"),
         # course fields must not be smuggled into a personal scope (and vice versa)
         personal(courseId=str(uuid4())),
         course(ownerId=str(uuid4())),
@@ -63,7 +62,6 @@ def test_scope_is_immutable():
         "course-empty-documents",
         "personal-missing-owner",
         "course-missing-course",
-        "extra-field",
         "personal-with-course-field",
         "course-with-owner-field",
         "bad-workspace-uuid",
@@ -73,3 +71,12 @@ def test_scope_is_immutable():
 def test_rejects_invalid_scope(payload):
     with pytest.raises(ValidationError):
         scope_adapter.validate_python(payload)
+
+
+def test_unknown_fields_are_ignored_and_not_kept():
+    payload = personal()
+
+    parsed = scope_adapter.validate_python({**payload, "futureField": "x"})
+
+    assert parsed.model_dump(by_alias=True, mode="json") == payload
+    assert not hasattr(parsed, "future_field")
