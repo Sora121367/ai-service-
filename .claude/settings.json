@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(uv run *)",
+      "Bash(uv sync)",
+      "Bash(git status)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(docker compose ps)",
+      "Bash(docker compose logs *)",
+      "Bash(npx @redocly/cli *)"
+    ],
+    "ask": [
+      "Edit(/contracts/**)",
+      "Edit(/docs/**)",
+      "Edit(/CLAUDE.md)",
+      "Edit(/app/prompts/**)",
+      "Edit(/migrations/**)",
+      "Edit(/pyproject.toml)",
+      "Edit(/uv.lock)",
+      "Edit(/compose.yaml)",
+      "Edit(/Dockerfile)",
+      "Edit(/.github/**)",
+      "Bash(uv add *)",
+      "Bash(uv remove *)",
+      "Bash(git push *)",
+      "Bash(git tag *)",
+      "Bash(docker compose down *)"
+    ],
+    "deny": [
+      "Read(/.env)",
+      "Read(/**/.env)",
+      "Read(/**/*.pem)",
+      "Read(/**/*.key)",
+      "Bash(git push --force *)",
+      "Bash(git push -f *)",
+      "Bash(git reset --hard *)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|MultiEdit|Write",
+        "hooks": [
+          { "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/format.sh" }
+        ]
+      }
+    ]
+  }
+}

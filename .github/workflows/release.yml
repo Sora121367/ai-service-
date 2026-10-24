@@ -1,0 +1,24 @@
+name: release
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write    # create the GitHub release
+  packages: write    # publish the Java client
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tag must match the contract version
+        run: |
+          v=$(grep -m1 -E '^  version:' contracts/ai-service.yaml | awk '{print $2}')
+          [ "v$v" = "${GITHUB_REF_NAME}" ] || { echo "Tag ${GITHUB_REF_NAME} != contract version v$v"; exit 1; }
+      - name: GitHub release with the contract attached (the backend downloads it from here)
+        env: { GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
+        run: gh release create "${GITHUB_REF_NAME}" contracts/ai-service.yaml --title "${GITHUB_REF_NAME}" --generate-notes
+      # TODO(lead, setup task 3): generate the Java client (openapi-generator, library "restclient" or "webclient",
+      # groupId com.insighthub, artifactId ai-service-client, version = tag without "v") and publish it to
+      # GitHub Packages (https://maven.pkg.github.com/${{ github.repository }}).

@@ -1,0 +1,33 @@
+name: ci
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync
+      - run: uv run ruff check . && uv run ruff format --check .
+      - name: pytest (exit 5 = no tests yet, allowed until the first test exists)
+        run: uv run pytest || [ $? -eq 5 ]
+
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: npx --yes @redocly/cli@latest lint contracts/ai-service.yaml
+      # TODO(AI owner, setup task 2): export FastAPI's OpenAPI (app.openapi()) and fail if it differs
+      # from contracts/ai-service.yaml. Add a breaking-change check against main.
+
+  # The ONLY required status check in branch protection.
+  ci-ok:
+    if: always()
+    needs: [test, contract]
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo '${{ toJSON(needs) }}' | jq -e 'to_entries | all(.value.result == "success")'

@@ -1,0 +1,64 @@
+openapi: 3.1.0
+info:
+  title: InsightHub AI Service (internal)
+  version: 0.1.0
+  description: |
+    Internal API of the InsightHub AI service. Owned by the insighthub-ai-service repo.
+    Called only by the InsightHub Spring Boot backend (Keycloak client-credentials token, audience insighthub-ai-service).
+    Released by tagging vX.Y.Z (= info.version): the YAML is attached to the GitHub release and a Java client is published.
+    Rules: every search/generation request carries a Scope; requests without one are rejected (400).
+    All delete endpoints are idempotent (ADR-0002). Long work returns 202 + job id, progress by callback (ADR-0003).
+servers:
+  - url: http://localhost:8000
+security:
+  - serviceToken: []
+paths:
+  /health:
+    get:
+      operationId: health
+      security: []
+      responses:
+        "200": { description: OK }
+components:
+  securitySchemes:
+    serviceToken:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Scope:
+      description: Built by Spring Boot only. The AI service applies it as a mandatory filter and never widens it.
+      oneOf:
+        - $ref: "#/components/schemas/PersonalScope"
+        - $ref: "#/components/schemas/CourseScope"
+      discriminator:
+        propertyName: scopeType
+        mapping:
+          personal: "#/components/schemas/PersonalScope"
+          course: "#/components/schemas/CourseScope"
+    PersonalScope:
+      type: object
+      required: [scopeType, workspaceId, ownerId, documentIds]
+      properties:
+        scopeType: { type: string, const: personal }
+        workspaceId: { type: string, format: uuid }
+        ownerId: { type: string, format: uuid }
+        documentIds:
+          description: Selected files, already intersected with the allowed scope. Never empty.
+          type: array
+          minItems: 1
+          items: { type: string, format: uuid }
+    CourseScope:
+      type: object
+      required: [scopeType, classroomId, courseId, documentIds]
+      properties:
+        scopeType: { type: string, const: course }
+        classroomId: { type: string, format: uuid }
+        courseId: { type: string, format: uuid }
+        documentIds:
+          type: array
+          minItems: 1
+          items: { type: string, format: uuid }
+    JobStatus:
+      type: string
+      enum: [QUEUED, RUNNING, SUCCEEDED, FAILED]

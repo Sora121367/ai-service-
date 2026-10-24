@@ -1,0 +1,30 @@
+[project]
+name = "insighthub-ai-service"
+version = "0.1.0"
+description = "InsightHub AI service: ingestion, RAG, generation"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi[standard]",
+    "pydantic",
+    "pydantic-settings",
+    "pyjwt[crypto]",
+    "httpx",
+    "python-docx",
+    "python-pptx",
+    "pymupdf",
+]
+# Added with the first code that uses them: sqlalchemy, pgvector, alembic, psycopg, boto3, redis.
+
+[project.optional-dependencies]
+# Local OCR (`uv sync --extra ocr`). Heavy, so it is not part of the default install.
+ocr = ["paddleocr", "paddlepaddle", "opencv-python-headless", "numpy"]
+
+[dependency-groups]
+dev = ["pytest", "ruff"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

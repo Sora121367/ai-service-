@@ -1,0 +1,88 @@
+# Local dev for the AI service. Two modes:
+#
+# 1) Connected (default): the backend's local stack (Keycloak :8180, RustFS :9000) is running on this machine,
+#    started from the backend repo wherever it is. This repo only reaches it by URL — set in .env.
+#      docker compose up -d
+#
+# 2) Standalone: no backend at all. Adds an own RustFS on :9100 (console :9101). Set S3_ENDPOINT=http://localhost:9100.
+#      docker compose --profile standalone up -d
+#
+# Add --profile gpu for Ollama on this machine, or set OLLAMA_URL to the shared GPU server.
+# Add --profile app to run the API and worker in containers instead of with uv.
+services:
+  vector-db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: vectors
+      POSTGRES_USER: ai
+      POSTGRES_PASSWORD: ai
+    ports: ["5433:5432"]
+    volumes: [vector-db:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ai -d vectors"]
+      interval: 5s
+      retries: 10
+
+  redis:   # internal job queue (ADR-0003)
+    image: redis:7
+    ports: ["6379:6379"]
+
+  rustfs:
+    profiles: [standalone]
+    image: rustfs/rustfs:latest   # pin a release tag before sharing environments
+    command: ["/data"]
+    environment:
+      RUSTFS_ACCESS_KEY: ${S3_ACCESS_KEY:-rustfsadmin}
+      RUSTFS_SECRET_KEY: ${S3_SECRET_KEY:-rustfsadmin123}
+      RUSTFS_ADDRESS: ":9000"
+      RUSTFS_CONSOLE_ADDRESS: ":9001"
+      RUSTFS_CONSOLE_ENABLE: "true"
+    ports: ["9100:9000", "9101:9001"]   # different from the backend's RustFS (9000/9001)
+    volumes: [rustfs:/data]
+
+  ollama:
+    profiles: [gpu]
+    image: ollama/ollama:latest
+    ports: ["11434:11434"]
+    volumes: [ollama:/root/.ollama]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  ai-api:
+    profiles: [app]
+    build: .
+    env_file: [.env]
+    environment: &container-env
+      # Inside a container, "localhost" is the container itself: reach the host through host.docker.internal.
+      DATABASE_URL: postgresql://ai:ai@vector-db:5432/vectors
+      REDIS_URL: redis://redis:6379
+      S3_ENDPOINT: ${CONTAINER_S3_ENDPOINT:-http://host.docker.internal:9000}
+      AUTH_JWKS_URL: ${CONTAINER_AUTH_JWKS_URL:-http://host.docker.internal:8180/realms/insighthub/protocol/openid-connect/certs}
+      BACKEND_CALLBACK_URL: ${CONTAINER_BACKEND_CALLBACK_URL:-http://host.docker.internal:8080}
+      OLLAMA_URL: ${CONTAINER_OLLAMA_URL:-http://ollama:11434}
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    ports: ["8000:8000"]
+    depends_on:
+      vector-db: { condition: service_healthy }
+      redis: { condition: service_started }
+
+  ai-worker:
+    profiles: [app]
+    build: .
+    command: ["python", "-m", "app.worker"]
+    env_file: [.env]
+    environment: *container-env
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    depends_on:
+      vector-db: { condition: service_healthy }
+      redis: { condition: service_started }
+
+volumes:
+  vector-db: {}
+  rustfs: {}
+  ollama: {}

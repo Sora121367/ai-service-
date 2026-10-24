@@ -1,0 +1,9 @@
+# Replace with real GitHub users/teams before enabling branch protection.
+*                 @your-org/ai-team
+/contracts/       @your-org/ai-owner @your-org/backend-leads
+/app/prompts/     @your-org/ai-owner
+/migrations/      @your-org/ai-owner
+/docs/            @your-org/ai-owner
+/CLAUDE.md        @your-org/ai-owner
+/.claude/         @your-org/ai-owner
+/.github/         @your-org/ai-owner

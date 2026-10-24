@@ -1,0 +1,29 @@
+# Personal Claude Code files (never commit)
+CLAUDE.local.md
+.claude/settings.local.json
+
+# Secrets
+.env
+*.pem
+*.key
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+dist/
+build/
+
+# Generated client output (published by CI, never committed)
+generated/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+
+# Sample media and model files
+samples/
+models/
