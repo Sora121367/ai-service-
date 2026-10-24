@@ -22,9 +22,11 @@ def _reject_foreign_fields(data: object, foreign: frozenset[str]) -> object:
     return data
 
 
-class _ScopeBase(BaseModel):
+class _Camel(BaseModel):
     model_config = ConfigDict(alias_generator=to_camel, extra="ignore", frozen=True)
 
+
+class _ScopeBase(_Camel):
     document_ids: Annotated[list[UUID], Field(min_length=1)]
 
 
@@ -51,3 +53,30 @@ class CourseScope(_ScopeBase):
 
 
 Scope = Annotated[PersonalScope | CourseScope, Field(discriminator="scope_type")]
+
+
+class IngestPersonalScope(_Camel):
+    """Where a new personal document's chunks belong. No `documentIds`: the request names the document."""
+
+    scope_type: Literal["personal"]
+    workspace_id: UUID
+    owner_id: UUID
+
+    @model_validator(mode="before")
+    @classmethod
+    def _no_course_fields(cls, data: object) -> object:
+        return _reject_foreign_fields(data, _COURSE_FIELDS)
+
+
+class IngestCourseScope(_Camel):
+    scope_type: Literal["course"]
+    classroom_id: UUID
+    course_id: UUID
+
+    @model_validator(mode="before")
+    @classmethod
+    def _no_personal_fields(cls, data: object) -> object:
+        return _reject_foreign_fields(data, _PERSONAL_FIELDS)
+
+
+IngestScope = Annotated[IngestPersonalScope | IngestCourseScope, Field(discriminator="scope_type")]

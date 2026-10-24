@@ -43,3 +43,26 @@ def scope_filter(scope: PersonalScope | CourseScope) -> ScopeFilter:
         case _:
             raise TypeError(f"Unsupported scope: {type(scope).__name__}")
     return ScopeFilter(equals=equals, document_ids=frozenset(scope.document_ids))
+
+
+_COLUMNS = frozenset({"scope_type", "classroom_id", "course_id", "workspace_id", "owner_id"})
+
+
+def where_clause(selected: ScopeFilter) -> tuple[str, dict[str, Any]]:
+    """The SQL form of a ScopeFilter: a WHERE condition with named parameters. Always narrows.
+
+    Column names come from `scope_filter` only and are checked against the scope columns, so
+    nothing a caller sends is ever interpolated into the SQL.
+    """
+    if not selected.document_ids:
+        raise ValueError("a scope filter needs at least one document id")
+    conditions: list[str] = []
+    params: dict[str, Any] = {}
+    for position, (column, value) in enumerate(selected.equals.items()):
+        if column not in _COLUMNS:
+            raise ValueError(f"not a scope column: {column}")
+        conditions.append(f"{column} = :scope_{position}")
+        params[f"scope_{position}"] = value
+    conditions.append("document_id = ANY(CAST(:scope_document_ids AS uuid[]))")
+    params["scope_document_ids"] = sorted(selected.document_ids, key=str)
+    return " AND ".join(conditions), params
