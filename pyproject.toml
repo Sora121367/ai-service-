@@ -15,6 +15,7 @@ dependencies = [
     "sqlalchemy>=2.1.6",
     "alembic>=1.20.1",
     "psycopg[binary]>=3.3.6",
+    "boto3>=1.43.118",
 ]
 # Added with the first code that uses them: pgvector, boto3, redis.
 

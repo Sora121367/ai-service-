@@ -24,6 +24,8 @@ class Settings(BaseSettings):
     s3_bucket: str
     s3_access_key: SecretStr | None = None
     s3_secret_key: SecretStr | None = None
+    storage_timeout_seconds: float = 30.0
+    storage_max_object_bytes: int = 200 * 1024 * 1024
 
     # Service-token auth: Spring Boot calls with a client-credentials token from Keycloak.
     auth_issuer: str  # must equal the token's `iss`
