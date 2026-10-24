@@ -7,10 +7,10 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi import APIRouter, Depends, FastAPI
 from fastapi.testclient import TestClient
 
-from app.auth import get_key_resolver, require_service_token
+from app.api.auth import get_key_resolver, require_service_token
+from app.api.routing import include_protected
 from app.config import Settings, get_settings
 from app.main import app as real_app
-from app.main import include_protected
 from tests.conftest import CLIENT_ID, ISSUER, settings_values
 
 

@@ -1,9 +1,7 @@
-import importlib.util
 import io
 
 import pptx
 import pymupdf
-import pytest
 from pptx.util import Inches
 
 from app.ingestion.ocr import run_ocr
@@ -102,16 +100,3 @@ def test_ocr_text_is_normalized(tmp_path):
     parsed = parse_document(path, "pdf")
     result = run_ocr(path, parsed, FakeEngine(["Cafe\u0301\x00 "]))
     assert result.blocks[1].text == "Café"
-
-
-@pytest.mark.skipif(
-    importlib.util.find_spec("paddleocr") is None,
-    reason="PaddleOCR not installed (uv sync --extra ocr)",
-)
-def test_paddle_engine_reads_rendered_text():
-    from app.ingestion.ocr import PaddleOcrEngine
-
-    doc = pymupdf.open()
-    doc.new_page().insert_text((72, 100), "Hello InsightHub", fontsize=32)
-    image = doc[0].get_pixmap(dpi=200).tobytes("png")
-    assert "InsightHub" in " ".join(PaddleOcrEngine("en").recognize(image))

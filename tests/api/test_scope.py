@@ -3,7 +3,7 @@ from uuid import uuid4
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
-from app.scope import CourseScope, PersonalScope, Scope
+from app.api.scope import CourseScope, PersonalScope, Scope
 
 scope_adapter = TypeAdapter(Scope)
 

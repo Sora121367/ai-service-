@@ -82,3 +82,18 @@ def test_secrets_are_not_printed():
 def test_only_the_repo_root_env_file_is_read():
     assert [p.name for p in config.ENV_FILES] == [".env"]
     assert all(p.parent == config._SERVICE_DIR for p in config.ENV_FILES)
+
+
+def test_tuning_defaults_match_the_code_defaults():
+    from app.clients import link_fetcher
+    from app.ingestion.chunking import DEFAULT_MAX_CHARS
+    from app.ingestion.ocr.images import DEFAULT_PDF_DPI
+
+    settings = Settings(_env_file=None, **settings_values())
+
+    assert settings.link_user_agent == link_fetcher.USER_AGENT
+    assert settings.link_max_bytes == link_fetcher.DEFAULT_MAX_BYTES
+    assert settings.link_max_redirects == link_fetcher.DEFAULT_MAX_REDIRECTS
+    assert settings.link_timeout_seconds == link_fetcher.DEFAULT_TIMEOUT_SECONDS
+    assert settings.ocr_pdf_dpi == DEFAULT_PDF_DPI
+    assert settings.chunk_max_chars == DEFAULT_MAX_CHARS
