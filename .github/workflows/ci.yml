@@ -20,8 +20,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: npx --yes @redocly/cli@latest lint contracts/ai-service.yaml
-      # TODO(AI owner, setup task 2): export FastAPI's OpenAPI (app.openapi()) and fail if it differs
-      # from contracts/ai-service.yaml. Add a breaking-change check against main.
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync
+      - name: The code's OpenAPI must match contracts/ai-service.yaml
+        run: uv run python -m scripts.contract_check
+      - name: No breaking change against the base branch (a major version bump is the way to remove things)
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          git fetch --depth=1 origin "$BASE_REF"
+          git show "origin/$BASE_REF:contracts/ai-service.yaml" > /tmp/base-contract.yaml
+          major() { grep -m1 -E '^  version:' "$1" | awk '{print $2}' | tr -d '"' | cut -d. -f1; }
+          if [ "$(major /tmp/base-contract.yaml)" != "$(major contracts/ai-service.yaml)" ]; then
+            echo "Major version bump: breaking changes are allowed, skipping."; exit 0
+          fi
+          go install github.com/oasdiff/oasdiff@latest
+          "$(go env GOPATH)/bin/oasdiff" breaking /tmp/base-contract.yaml contracts/ai-service.yaml --fail-on ERR
 
   # The ONLY required status check in branch protection.
   ci-ok:
